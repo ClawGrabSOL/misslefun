@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/api/launched", "destination": "/api/launched" },
+    { "source": "/api/ipfs", "destination": "/api/ipfs" },
+    { "source": "/api/trade-local", "destination": "/api/trade-local" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
