@@ -1,7 +1,14 @@
 {
-  "rewrites": [
-    { "source": "/api/launched", "destination": "/api/launched" },
-    { "source": "/api/ipfs", "destination": "/api/ipfs" },
-    { "source": "/api/trade-local", "destination": "/api/trade-local" }
+  "version": 2,
+  "builds": [
+    { "src": "public/**", "use": "@vercel/static" },
+    { "src": "api/*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/launched", "dest": "/api/launched.js" },
+    { "src": "/api/ipfs", "dest": "/api/ipfs.js" },
+    { "src": "/api/trade-local", "dest": "/api/trade-local.js" },
+    { "src": "/logo.jpeg", "dest": "/public/logo.jpeg" },
+    { "src": "/(.*)", "dest": "/public/index.html" }
   ]
 }

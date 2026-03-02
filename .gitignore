@@ -1,3 +1,5 @@
 node_modules/
 launched.json
 .env
+
+.vercel
