@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>missle.fun — Launch A Nation</title>
+  <link id="favicon" rel="icon" type="image/jpeg" href="/logo.jpeg"/>
+  <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@1.95.4/lib/index.iife.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; color: #fff; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; width: 100vw; }
+    #globe-container { position: fixed; inset: 0; z-index: 1; }
+
+    /* HEADER */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 60%, transparent);
+      pointer-events: none;
+    }
+    #logo img { height: 36px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(0,240,181,0.5)); }
+    .blink { animation: blink 1s infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* SIDE PANEL */
+    #side-panel {
+      position: fixed; right: 20px; top: 50%; transform: translateY(-50%);
+      z-index: 20; width: 260px;
+      background: rgba(0,8,24,0.92); border: 1px solid rgba(0,200,255,0.3);
+      border-radius: 14px; padding: 20px; backdrop-filter: blur(12px);
+      box-shadow: 0 0 40px rgba(0,100,255,0.1);
+    }
+    #side-panel h3 { font-size: 10px; letter-spacing: 2.5px; color: #0cf; margin-bottom: 16px; text-transform: uppercase; opacity: 0.8; }
+
+    /* WALLET CONNECT */
+    #wallet-section { margin-bottom: 16px; }
+    #connect-btn {
+      width: 100%; padding: 11px 14px;
+      background: linear-gradient(135deg, rgba(153,87,255,0.2), rgba(80,40,200,0.2));
+      border: 1px solid rgba(153,87,255,0.5);
+      border-radius: 10px; color: #a259ff;
+      font-family: 'Courier New', monospace; font-size: 12px;
+      font-weight: bold; letter-spacing: 1px; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    #connect-btn:hover { background: linear-gradient(135deg, rgba(153,87,255,0.35), rgba(80,40,200,0.35)); box-shadow: 0 0 20px rgba(153,87,255,0.3); }
+    #connect-btn.connected { border-color: rgba(0,255,100,0.4); color: #0f8; background: rgba(0,255,100,0.08); }
+    #wallet-addr { font-size: 10px; color: #556; margin-top: 6px; text-align: center; letter-spacing: 1px; }
+
+    /* TARGET BOX */
+    #target-box {
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(255,80,0,0.35);
+      border-radius: 10px; padding: 14px; margin-bottom: 16px;
+      min-height: 78px; display: flex; flex-direction: column; justify-content: center;
+    }
+    #target-hint { font-size: 12px; color: #444; font-style: italic; text-align: center; }
+    #target-flag { font-size: 28px; line-height: 1; margin-bottom: 4px; display: none; }
+    #target-name { font-size: 17px; font-weight: bold; color: #ff4500; text-shadow: 0 0 10px rgba(255,69,0,0.6); display: none; }
+    #target-ticker { font-size: 12px; color: #0cf; margin-top: 3px; display: none; }
+
+    /* WARHEAD */
+    .field-label { font-size: 9px; letter-spacing: 1.5px; color: #556; text-transform: uppercase; margin-bottom: 8px; display: block; }
+    .warhead-opts { display: flex; gap: 6px; margin-bottom: 16px; }
+    .w-btn {
+      flex: 1; padding: 8px 4px; background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(0,200,255,0.2); border-radius: 8px; color: #888;
+      font-family: 'Courier New', monospace; font-size: 10px; cursor: pointer; text-align: center; transition: all 0.2s;
+    }
+    .w-btn:hover, .w-btn.active { border-color: #0cf; background: rgba(0,200,255,0.1); color: #0cf; }
+
+    /* LAUNCH BTN */
+    #launch-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #ff4500, #cc0000);
+      border: none; border-radius: 10px; color: #fff;
+      font-family: 'Courier New', monospace; font-size: 14px;
+      font-weight: bold; letter-spacing: 3px; cursor: not-allowed;
+      text-transform: uppercase; opacity: 0.35; transition: all 0.2s;
+    }
+    #launch-btn.ready { opacity: 1; cursor: pointer; animation: pulse-btn 2s infinite; box-shadow: 0 0 24px rgba(255,69,0,0.5); }
+    @keyframes pulse-btn { 0%,100% { box-shadow: 0 0 20px rgba(255,69,0,0.4); } 50% { box-shadow: 0 0 44px rgba(255,69,0,0.9); } }
+    #launch-btn.ready:hover { transform: scale(1.03); }
+    #launch-btn:disabled { opacity: 0.35 !important; cursor: not-allowed !important; animation: none !important; transform: none !important; }
+    #cost-note { margin-top: 10px; font-size: 10px; color: #333; text-align: center; line-height: 1.7; }
+
+    /* STATUS BAR */
+    #status-bar {
+      margin-top: 12px; padding: 8px 10px;
+      background: rgba(0,0,0,0.4); border-radius: 8px;
+      font-size: 10px; color: #556; text-align: center;
+      min-height: 30px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    #status-bar.pending { color: #ffa500; border-color: rgba(255,165,0,0.3); }
+    #status-bar.success { color: #0f8; border-color: rgba(0,255,100,0.3); }
+    #status-bar.error   { color: #f44; border-color: rgba(255,68,68,0.3); }
+
+    /* MODAL */
+    #modal-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.78); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center;
+    }
+    #modal-overlay.show { display: flex; }
+    #modal {
+      background: rgba(0,8,28,0.97); border: 1px solid rgba(0,200,255,0.4);
+      border-radius: 18px; padding: 34px 28px; width: 340px;
+      text-align: center; animation: pop-in 0.25s ease-out;
+      box-shadow: 0 0 60px rgba(0,100,255,0.2);
+    }
+    @keyframes pop-in { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    #modal-flag-big { font-size: 62px; margin-bottom: 10px; }
+    #modal-cname { font-size: 22px; font-weight: bold; color: #ff4500; letter-spacing: 2px; }
+    #modal-cticker { font-size: 14px; color: #0cf; margin: 4px 0 20px; letter-spacing: 1px; }
+    .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+    .m-cell { background: rgba(0,0,0,0.4); border: 1px solid rgba(0,200,255,0.12); border-radius: 8px; padding: 9px; }
+    .m-cell .ml { font-size: 9px; color: #556; letter-spacing: 1px; text-transform: uppercase; }
+    .m-cell .mv { font-size: 13px; font-weight: bold; color: #0cf; margin-top: 3px; word-break: break-all; }
+    .m-cell .mv.pump { color: #a259ff; }
+    #modal-confirm {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #ff4500, #cc0000);
+      border: none; border-radius: 10px; color: #fff;
+      font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold;
+      letter-spacing: 3px; cursor: pointer; margin-bottom: 12px;
+      box-shadow: 0 0 20px rgba(255,69,0,0.4); transition: transform 0.1s;
+    }
+    #modal-confirm:hover { transform: scale(1.02); }
+    #modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    #modal-cancel { background: none; border: none; color: #445; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; letter-spacing: 1px; }
+    #modal-cancel:hover { color: #889; }
+
+    /* TICKER */
+    #ticker-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+      padding: 10px 0; background: linear-gradient(to top, rgba(0,0,0,0.9) 60%, transparent);
+      overflow: hidden; pointer-events: none;
+    }
+    #ticker-inner { display: flex; gap: 60px; white-space: nowrap; animation: ticker 30s linear infinite; font-size: 11px; color: #0cf; letter-spacing: 1px; }
+    @keyframes ticker { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
+
+    /* TOAST */
+    #toast {
+      position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      z-index: 200; color: #fff; font-family: 'Courier New', monospace;
+      font-size: 13px; font-weight: bold; padding: 12px 28px; border-radius: 10px;
+      letter-spacing: 2px; opacity: 0; transition: all 0.35s ease; pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.success { background: linear-gradient(135deg, #00aa44, #007733); box-shadow: 0 0 30px rgba(0,180,80,0.5); }
+    #toast.error   { background: linear-gradient(135deg, #cc2200, #881100); box-shadow: 0 0 30px rgba(200,50,0,0.5); }
+
+    /* MISSILE CANVAS */
+    #missile-canvas { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
+    #globe-container.hovering { cursor: crosshair; }
+
+    /* LOADING */
+    #loading {
+      position: fixed; inset: 0; z-index: 50; background: #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    }
+    #loading .logo { font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #0cf; text-shadow: 0 0 20px #0cf; }
+    #loading .sub  { font-size: 12px; color: #556; letter-spacing: 2px; }
+    .loader { width: 40px; height: 40px; border: 2px solid #111; border-top-color: #0cf; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* NO PHANTOM warning */
+    #no-phantom { font-size: 11px; color: #f84; text-align: center; margin-top: 6px; display: none; }
+    #no-phantom a { color: #a259ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <img src="/logo.jpeg" alt="missle.fun" style="height:48px;width:auto;filter:drop-shadow(0 0 16px rgba(0,240,181,0.6))"/>
+  <div class="loader"></div>
+  <div class="sub">LOADING EARTH...</div>
+</div>
+
+<div id="globe-container"></div>
+<canvas id="missile-canvas"></canvas>
+
+<!-- HEADER -->
+<div id="header">
+  <div id="logo"><img src="/logo.jpeg" alt="missle.fun"/></div>
+  <div style="font-size:11px;color:#0f0;text-shadow:0 0 8px #0f0;letter-spacing:1px;pointer-events:none">
+    <span class="blink">●</span> LIVE — pump.fun launcher
+  </div>
+</div>
+
+<!-- SIDE PANEL -->
+<div id="side-panel">
+  <h3>🚀 Missile Command</h3>
+
+  <div id="wallet-section">
+    <button id="connect-btn" onclick="connectWallet()">
+      <span>👻</span> Connect Phantom
+    </button>
+    <div id="wallet-addr">Not connected</div>
+    <div id="no-phantom">Phantom not found. <a href="https://phantom.app" target="_blank">Install it →</a></div>
+    <button id="demo-btn" onclick="toggleDemo()" style="width:100%;margin-top:8px;padding:8px;background:rgba(255,200,0,0.1);border:1px solid rgba(255,200,0,0.3);border-radius:8px;color:#fc0;font-family:'Courier New',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;">
+      🎬 DEMO MODE (no wallet)
+    </button>
+  </div>
+
+  <div id="target-box">
+    <div id="target-hint">Click any country<br/>on the globe</div>
+    <div id="target-flag"></div>
+    <div id="target-name"></div>
+    <div id="target-ticker"></div>
+  </div>
+
+  <label class="field-label">Select Warhead</label>
+  <div class="warhead-opts">
+    <div class="w-btn active" data-type="ICBM">🚀 ICBM</div>
+    <div class="w-btn" data-type="NUKE">☢️ NUKE</div>
+    <div class="w-btn" data-type="HYPER">⚡ HYPER</div>
+  </div>
+
+  <button id="launch-btn" onclick="openModal()">🚀 LAUNCH</button>
+  <div id="cost-note">~0.02 SOL per launch<br/>token deployed on pump.fun</div>
+  <div id="status-bar">Select a country to begin</div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal">
+    <div id="modal-flag-big">🏳️</div>
+    <div id="modal-cname">COUNTRY</div>
+    <div id="modal-cticker">$TICKER</div>
+    <div class="m-grid">
+      <div class="m-cell"><div class="ml">Supply</div><div class="mv">1,000,000,000</div></div>
+      <div class="m-cell"><div class="ml">Cost</div><div class="mv">~0.02 SOL</div></div>
+      <div class="m-cell"><div class="ml">Warhead</div><div class="mv" id="modal-warhead-val">ICBM</div></div>
+      <div class="m-cell"><div class="ml">DEX</div><div class="mv pump">pump.fun</div></div>
+    </div>
+    <div class="m-cell" style="margin-bottom:20px;text-align:left;width:100%">
+      <div class="ml">Wallet</div>
+      <div class="mv" id="modal-wallet-show" style="font-size:10px;">—</div>
+    </div>
+    <button id="modal-confirm" onclick="confirmLaunch()">🚀 CONFIRM LAUNCH</button><br/>
+    <button id="modal-cancel" onclick="closeModal()">abort mission</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- TICKER -->
+<div id="ticker-bar">
+  <div id="ticker-inner">
+    <span>🚀 $BRAZIL launched 2m ago — 847 buys</span>
+    <span>🚀 $RUSSIA launched 8m ago — 1,241 buys</span>
+    <span>🚀 $PAKISTAN launched 15m ago — 392 buys</span>
+    <span>🚀 $NORTHKOREA launched 22m ago — 2,103 buys</span>
+    <span>🚀 $INDIA launched 31m ago — 673 buys</span>
+    <span>🚀 $GERMANY launched 45m ago — 511 buys</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  COUNTRY DATA
+// ═══════════════════════════════════════════
+const countryMeta = {
+  'Afghanistan':{'flag':'🇦🇫','ticker':'AFG'},'Albania':{'flag':'🇦🇱','ticker':'ALB'},
+  'Algeria':{'flag':'🇩🇿','ticker':'ALGERIA'},'Angola':{'flag':'🇦🇴','ticker':'ANGOLA'},
+  'Argentina':{'flag':'🇦🇷','ticker':'ARGENTINA'},'Australia':{'flag':'🇦🇺','ticker':'AUSTRALIA'},
+  'Austria':{'flag':'🇦🇹','ticker':'AUSTRIA'},'Azerbaijan':{'flag':'🇦🇿','ticker':'AZE'},
+  'Bangladesh':{'flag':'🇧🇩','ticker':'BANGLA'},'Belarus':{'flag':'🇧🇾','ticker':'BELARUS'},
+  'Belgium':{'flag':'🇧🇪','ticker':'BELGIUM'},'Bolivia':{'flag':'🇧🇴','ticker':'BOLIVIA'},
+  'Brazil':{'flag':'🇧🇷','ticker':'BRAZIL'},'Bulgaria':{'flag':'🇧🇬','ticker':'BULGARIA'},
+  'Cambodia':{'flag':'🇰🇭','ticker':'CAMBODIA'},'Cameroon':{'flag':'🇨🇲','ticker':'CAMEROON'},
+  'Canada':{'flag':'🇨🇦','ticker':'CANADA'},'Chile':{'flag':'🇨🇱','ticker':'CHILE'},
+  'China':{'flag':'🇨🇳','ticker':'CHINA'},'Colombia':{'flag':'🇨🇴','ticker':'COLOMBIA'},
+  'Croatia':{'flag':'🇭🇷','ticker':'CROATIA'},'Cuba':{'flag':'🇨🇺','ticker':'CUBA'},
+  'Czechia':{'flag':'🇨🇿','ticker':'CZECHIA'},'Czech Republic':{'flag':'🇨🇿','ticker':'CZECHIA'},
+  'Denmark':{'flag':'🇩🇰','ticker':'DENMARK'},'Ecuador':{'flag':'🇪🇨','ticker':'ECUADOR'},
+  'Egypt':{'flag':'🇪🇬','ticker':'EGYPT'},'Ethiopia':{'flag':'🇪🇹','ticker':'ETHIOPIA'},
+  'Finland':{'flag':'🇫🇮','ticker':'FINLAND'},'France':{'flag':'🇫🇷','ticker':'FRANCE'},
+  'Germany':{'flag':'🇩🇪','ticker':'GERMANY'},'Ghana':{'flag':'🇬🇭','ticker':'GHANA'},
+  'Greece':{'flag':'🇬🇷','ticker':'GREECE'},'Guatemala':{'flag':'🇬🇹','ticker':'GUATEMALA'},
+  'Hungary':{'flag':'🇭🇺','ticker':'HUNGARY'},'India':{'flag':'🇮🇳','ticker':'INDIA'},
+  'Indonesia':{'flag':'🇮🇩','ticker':'INDONESIA'},'Iran':{'flag':'🇮🇷','ticker':'IRAN'},
+  'Iraq':{'flag':'🇮🇶','ticker':'IRAQ'},'Ireland':{'flag':'🇮🇪','ticker':'IRELAND'},
+  'Israel':{'flag':'🇮🇱','ticker':'ISRAEL'},'Italy':{'flag':'🇮🇹','ticker':'ITALY'},
+  'Japan':{'flag':'🇯🇵','ticker':'JAPAN'},'Jordan':{'flag':'🇯🇴','ticker':'JORDAN'},
+  'Kazakhstan':{'flag':'🇰🇿','ticker':'KAZAKH'},'Kenya':{'flag':'🇰🇪','ticker':'KENYA'},
+  'North Korea':{'flag':'🇰🇵','ticker':'DPRK'},'South Korea':{'flag':'🇰🇷','ticker':'SKOREA'},
+  'Kuwait':{'flag':'🇰🇼','ticker':'KUWAIT'},'Libya':{'flag':'🇱🇾','ticker':'LIBYA'},
+  'Malaysia':{'flag':'🇲🇾','ticker':'MALAYSIA'},'Mexico':{'flag':'🇲🇽','ticker':'MEXICO'},
+  'Mongolia':{'flag':'🇲🇳','ticker':'MONGOLIA'},'Morocco':{'flag':'🇲🇦','ticker':'MOROCCO'},
+  'Mozambique':{'flag':'🇲🇿','ticker':'MOZAMBIQUE'},'Myanmar':{'flag':'🇲🇲','ticker':'MYANMAR'},
+  'Netherlands':{'flag':'🇳🇱','ticker':'NETHERLANDS'},'New Zealand':{'flag':'🇳🇿','ticker':'NZ'},
+  'Nigeria':{'flag':'🇳🇬','ticker':'NIGERIA'},'Norway':{'flag':'🇳🇴','ticker':'NORWAY'},
+  'Pakistan':{'flag':'🇵🇰','ticker':'PAKISTAN'},'Papua New Guinea':{'flag':'🇵🇬','ticker':'PNG'},
+  'Paraguay':{'flag':'🇵🇾','ticker':'PARAGUAY'},'Peru':{'flag':'🇵🇪','ticker':'PERU'},
+  'Philippines':{'flag':'🇵🇭','ticker':'PHILIPPINES'},'Poland':{'flag':'🇵🇱','ticker':'POLAND'},
+  'Portugal':{'flag':'🇵🇹','ticker':'PORTUGAL'},'Romania':{'flag':'🇷🇴','ticker':'ROMANIA'},
+  'Russia':{'flag':'🇷🇺','ticker':'RUSSIA'},'Saudi Arabia':{'flag':'🇸🇦','ticker':'SAUDI'},
+  'Serbia':{'flag':'🇷🇸','ticker':'SERBIA'},'Somalia':{'flag':'🇸🇴','ticker':'SOMALIA'},
+  'South Africa':{'flag':'🇿🇦','ticker':'SOUTHAFRICA'},'Spain':{'flag':'🇪🇸','ticker':'SPAIN'},
+  'Sudan':{'flag':'🇸🇩','ticker':'SUDAN'},'Sweden':{'flag':'🇸🇪','ticker':'SWEDEN'},
+  'Switzerland':{'flag':'🇨🇭','ticker':'SWISS'},'Syria':{'flag':'🇸🇾','ticker':'SYRIA'},
+  'Taiwan':{'flag':'🇹🇼','ticker':'TAIWAN'},'Tanzania':{'flag':'🇹🇿','ticker':'TANZANIA'},
+  'Thailand':{'flag':'🇹🇭','ticker':'THAILAND'},'Turkey':{'flag':'🇹🇷','ticker':'TURKEY'},
+  'Turkiye':{'flag':'🇹🇷','ticker':'TURKEY'},'Uganda':{'flag':'🇺🇬','ticker':'UGANDA'},
+  'Ukraine':{'flag':'🇺🇦','ticker':'UKRAINE'},'United Arab Emirates':{'flag':'🇦🇪','ticker':'UAE'},
+  'United Kingdom':{'flag':'🇬🇧','ticker':'UK'},
+  'United States of America':{'flag':'🇺🇸','ticker':'USA'},'United States':{'flag':'🇺🇸','ticker':'USA'},
+  'Uruguay':{'flag':'🇺🇾','ticker':'URUGUAY'},'Uzbekistan':{'flag':'🇺🇿','ticker':'UZBEK'},
+  'Venezuela':{'flag':'🇻🇪','ticker':'VENEZUELA'},'Vietnam':{'flag':'🇻🇳','ticker':'VIETNAM'},
+  'Yemen':{'flag':'🇾🇪','ticker':'YEMEN'},'Zambia':{'flag':'🇿🇲','ticker':'ZAMBIA'},
+  'Zimbabwe':{'flag':'🇿🇼','ticker':'ZIMBABWE'},
+};
+function getMeta(n) {
+  if (countryMeta[n]) return countryMeta[n];
+  for (const [k,v] of Object.entries(countryMeta))
+    if (n.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(n.toLowerCase())) return v;
+  return { flag:'🏳️', ticker: n.replace(/[^A-Za-z]/g,'').toUpperCase().slice(0,10) };
+}
+const centroids = {
+  'United States of America':{lat:39.5,lng:-98.4},'Canada':{lat:60.0,lng:-96.0},
+  'Mexico':{lat:23.6,lng:-102.5},'Brazil':{lat:-14.2,lng:-51.9},
+  'Argentina':{lat:-38.4,lng:-63.6},'United Kingdom':{lat:55.4,lng:-3.4},
+  'France':{lat:46.2,lng:2.2},'Germany':{lat:51.2,lng:10.5},
+  'Russia':{lat:61.5,lng:105.3},'China':{lat:35.9,lng:104.2},
+  'India':{lat:20.6,lng:78.9},'Pakistan':{lat:30.4,lng:69.3},
+  'Japan':{lat:36.2,lng:138.3},'Australia':{lat:-25.3,lng:133.8},
+  'South Africa':{lat:-30.6,lng:22.9},'Nigeria':{lat:9.1,lng:8.7},
+  'Egypt':{lat:26.8,lng:30.8},'Saudi Arabia':{lat:23.9,lng:45.1},
+  'Iran':{lat:32.4,lng:53.7},'Turkey':{lat:38.9,lng:35.2},'Turkiye':{lat:38.9,lng:35.2},
+  'Ukraine':{lat:48.4,lng:31.2},'North Korea':{lat:40.3,lng:127.5},
+  'South Korea':{lat:35.9,lng:127.8},'Indonesia':{lat:-0.8,lng:113.9},
+  'Spain':{lat:40.5,lng:-3.7},'Italy':{lat:41.9,lng:12.6},'Poland':{lat:51.9,lng:19.1},
+  'Colombia':{lat:4.6,lng:-74.1},'Venezuela':{lat:6.4,lng:-66.6},
+  'Peru':{lat:-9.2,lng:-75.0},'Chile':{lat:-35.7,lng:-71.5},
+  'Kazakhstan':{lat:48.0,lng:66.9},'Vietnam':{lat:14.1,lng:108.3},
+  'Thailand':{lat:15.9,lng:100.9},'Malaysia':{lat:4.2,lng:108.0},
+  'Myanmar':{lat:17.1,lng:96.9},'Iraq':{lat:33.2,lng:43.7},
+  'Syria':{lat:34.8,lng:38.9},'Libya':{lat:26.3,lng:17.2},
+  'Algeria':{lat:28.0,lng:1.7},'Morocco':{lat:31.8,lng:-7.1},
+  'Ethiopia':{lat:9.1,lng:40.5},'Kenya':{lat:-0.0,lng:37.9},
+  'Angola':{lat:-11.2,lng:17.9},'Mozambique':{lat:-18.7,lng:35.5},
+  'Tanzania':{lat:-6.4,lng:34.9},'Ghana':{lat:7.9,lng:-1.0},
+  'Cameroon':{lat:3.9,lng:11.5},'Somalia':{lat:5.2,lng:46.2},
+  'Sweden':{lat:60.1,lng:18.6},'Norway':{lat:60.5,lng:8.5},
+  'Finland':{lat:61.9,lng:25.7},'Denmark':{lat:56.3,lng:9.5},
+  'Netherlands':{lat:52.1,lng:5.3},'Belgium':{lat:50.5,lng:4.5},
+  'Portugal':{lat:39.4,lng:-8.2},'Greece':{lat:39.1,lng:21.8},
+  'Romania':{lat:45.9,lng:24.9},'Hungary':{lat:47.2,lng:19.5},
+  'Czechia':{lat:49.8,lng:15.5},'Czech Republic':{lat:49.8,lng:15.5},
+  'Austria':{lat:47.5,lng:14.6},'Switzerland':{lat:46.8,lng:8.2},
+  'Belarus':{lat:53.7,lng:28.0},'Serbia':{lat:44.0,lng:21.0},
+  'Croatia':{lat:45.1,lng:15.2},'Bulgaria':{lat:42.7,lng:25.5},
+  'Israel':{lat:31.0,lng:34.9},'Jordan':{lat:30.6,lng:36.2},
+  'Kuwait':{lat:29.3,lng:47.5},'Azerbaijan':{lat:40.1,lng:47.6},
+  'Uzbekistan':{lat:41.4,lng:64.6},'Mongolia':{lat:46.9,lng:103.8},
+  'Bangladesh':{lat:23.7,lng:90.4},'Afghanistan':{lat:33.9,lng:67.7},
+  'Cuba':{lat:21.5,lng:-79.0},'Guatemala':{lat:15.8,lng:-90.2},
+  'Ecuador':{lat:-1.8,lng:-78.2},'Bolivia':{lat:-16.3,lng:-63.6},
+  'Paraguay':{lat:-23.4,lng:-58.4},'Uruguay':{lat:-32.5,lng:-55.8},
+  'Cambodia':{lat:12.6,lng:104.9},'Philippines':{lat:12.9,lng:121.8},
+  'Taiwan':{lat:23.7,lng:120.9},'New Zealand':{lat:-41.5,lng:172.8},
+  'Papua New Guinea':{lat:-6.3,lng:143.9},
+};
+function getCentroid(n) { return centroids[n] || { lat:(Math.random()-0.5)*120, lng:(Math.random()-0.5)*340 }; }
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let selectedCountry = null;
+let selectedWarhead = 'ICBM';
+let globeInstance = null;
+let walletPubkey = null;
+let isLaunching = false;
+let demoMode = false;
+let launchedDB = {}; // { countryName: { mint, pumpUrl, ticker, flag, launchedAt } }
+
+async function fetchLaunched() {
+  try {
+    const r = await fetch('/api/launched');
+    launchedDB = await r.json();
+    if (globeInstance) refreshGlobeColors();
+    updateTickerFromDB();
+  } catch(e) { console.warn('Could not fetch launched DB', e); }
+}
+
+function isLaunched(name) { return !!launchedDB[name]; }
+
+function refreshGlobeColors() {
+  globeInstance.polygonCapColor(f => {
+    const n = f.properties.NAME || f.properties.ADMIN || '';
+    if (isLaunched(n)) return 'rgba(255,0,0,0.35)';
+    if (selectedCountry?.name === n) return 'rgba(255,69,0,0.65)';
+    return 'rgba(0,200,255,0.06)';
+  });
+  globeInstance.polygonAltitude(f => {
+    const n = f.properties.NAME || f.properties.ADMIN || '';
+    return selectedCountry?.name === n ? 0.015 : 0.005;
+  });
+  globeInstance.polygonLabel(f => {
+    const name = f.properties.NAME || f.properties.ADMIN || '';
+    const meta = getMeta(name);
+    const done = launchedDB[name];
+    if (done) {
+      return `<div style="background:rgba(20,0,0,0.92);border:1px solid rgba(255,0,0,0.5);border-radius:8px;padding:10px 14px;font-family:'Courier New',monospace;font-size:12px;color:#f44;pointer-events:none">
+        <span style="font-size:20px">${meta.flag}</span><br/><b style="color:#fff">${name}</b><br/>
+        <span style="color:#f44">☠️ ALREADY LAUNCHED</span><br/>
+        <a href="${done.pumpUrl}" target="_blank" style="color:#a259ff;font-size:10px">$${done.ticker} on pump.fun →</a>
+      </div>`;
+    }
+    return `<div style="background:rgba(0,8,24,0.9);border:1px solid rgba(0,200,255,0.4);border-radius:8px;padding:10px 14px;font-family:'Courier New',monospace;font-size:13px;color:#0cf;pointer-events:none">
+      <span style="font-size:20px">${meta.flag}</span><br/><b style="color:#fff">${name}</b><br/>
+      <span style="color:#ff4500;font-size:11px">$${meta.ticker}</span></div>`;
+  });
+}
+
+function updateTickerFromDB() {
+  const inner = document.getElementById('ticker-inner');
+  const entries = Object.values(launchedDB).slice(-10).reverse();
+  if (!entries.length) return;
+  inner.innerHTML = entries.map(e =>
+    `<span>🚀 $${e.ticker} launched ${timeAgo(e.launchedAt)} — <a href="${e.pumpUrl}" target="_blank" style="color:#a259ff">pump.fun →</a></span>`
+  ).join('');
+}
+
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+function toggleDemo() {
+  demoMode = !demoMode;
+  const btn = document.getElementById('demo-btn');
+  if (demoMode) {
+    btn.style.background = 'rgba(255,200,0,0.25)';
+    btn.style.borderColor = 'rgba(255,200,0,0.7)';
+    btn.textContent = '🎬 DEMO MODE ON — wallet skipped';
+    walletPubkey = 'DEMO';
+    document.getElementById('connect-btn').classList.add('connected');
+    document.getElementById('connect-btn').innerHTML = '<span>🎬</span> Demo Mode Active';
+    document.getElementById('wallet-addr').textContent = 'No real transactions will be made';
+  } else {
+    btn.style.background = 'rgba(255,200,0,0.1)';
+    btn.style.borderColor = 'rgba(255,200,0,0.3)';
+    btn.textContent = '🎬 DEMO MODE (no wallet)';
+    walletPubkey = null;
+    document.getElementById('connect-btn').classList.remove('connected');
+    document.getElementById('connect-btn').innerHTML = '<span>👻</span> Connect Phantom';
+    document.getElementById('wallet-addr').textContent = 'Not connected';
+  }
+  checkLaunchReady();
+}
+
+// ═══════════════════════════════════════════
+//  WALLET CONNECT
+// ═══════════════════════════════════════════
+async function connectWallet() {
+  const phantom = window.phantom?.solana || window.solana;
+  if (!phantom || !phantom.isPhantom) {
+    document.getElementById('no-phantom').style.display = 'block';
+    return;
+  }
+  try {
+    const resp = await phantom.connect();
+    walletPubkey = resp.publicKey.toString();
+    document.getElementById('connect-btn').classList.add('connected');
+    document.getElementById('connect-btn').innerHTML = `<span>✅</span> ${walletPubkey.slice(0,4)}...${walletPubkey.slice(-4)}`;
+    document.getElementById('wallet-addr').textContent = 'Connected ✓';
+    checkLaunchReady();
+  } catch(e) {
+    showToast('Wallet connection cancelled', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════
+//  GLOBE INIT
+// ═══════════════════════════════════════════
+async function initGlobe() {
+  const res = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson');
+  const world = await res.json();
+
+  document.getElementById('loading').style.opacity = '0';
+  setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
+
+  globeInstance = Globe()
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+    .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+    .width(window.innerWidth).height(window.innerHeight)
+    .polygonsData(world.features)
+    .polygonCapColor(f => {
+      const n = f.properties.NAME || f.properties.ADMIN || '';
+      return selectedCountry?.name === n ? 'rgba(255,69,0,0.65)' : 'rgba(0,200,255,0.06)';
+    })
+    .polygonSideColor(() => 'rgba(0,150,255,0.04)')
+    .polygonStrokeColor(() => 'rgba(0,200,255,0.35)')
+    .polygonAltitude(f => {
+      const n = f.properties.NAME || f.properties.ADMIN || '';
+      return selectedCountry?.name === n ? 0.015 : 0.005;
+    })
+    .onPolygonClick(handleCountryClick)
+    .onPolygonHover(f => { document.getElementById('globe-container').classList.toggle('hovering', !!f); })
+    .polygonLabel(f => {
+      const name = f.properties.NAME || f.properties.ADMIN || '';
+      const meta = getMeta(name);
+      return `<div style="background:rgba(0,8,24,0.9);border:1px solid rgba(0,200,255,0.4);border-radius:8px;padding:10px 14px;font-family:'Courier New',monospace;font-size:13px;color:#0cf;pointer-events:none">
+        <span style="font-size:20px">${meta.flag}</span><br/><b style="color:#fff">${name}</b><br/>
+        <span style="color:#ff4500;font-size:11px">$${meta.ticker}</span></div>`;
+    })
+    (document.getElementById('globe-container'));
+
+  globeInstance.controls().autoRotate = true;
+  globeInstance.controls().autoRotateSpeed = 0.4;
+  globeInstance.controls().enableDamping = true;
+  globeInstance.controls().dampingFactor = 0.08;
+
+  let rotTimer;
+  globeInstance.controls().addEventListener('start', () => { globeInstance.controls().autoRotate = false; });
+  globeInstance.controls().addEventListener('end', () => {
+    clearTimeout(rotTimer);
+    rotTimer = setTimeout(() => { globeInstance.controls().autoRotate = true; }, 5000);
+  });
+  window.addEventListener('resize', () => { globeInstance.width(window.innerWidth).height(window.innerHeight); });
+
+  // Load already-launched countries and mark on globe
+  await fetchLaunched();
+  // Poll every 15s to pick up other users' launches
+  setInterval(fetchLaunched, 15000);
+}
+
+// ═══════════════════════════════════════════
+//  COUNTRY CLICK
+// ═══════════════════════════════════════════
+function handleCountryClick(feat) {
+  if (!feat) return;
+  const name = feat.properties.NAME || feat.properties.ADMIN || 'Unknown';
+  const meta = getMeta(name);
+
+  // Block already-launched countries
+  if (isLaunched(name)) {
+    const done = launchedDB[name];
+    setStatus(`☠️ ${meta.flag} ${name} already launched — <a href="${done.pumpUrl}" target="_blank" style="color:#a259ff">view $${done.ticker} →</a>`, 'error');
+    showToast(`☠️ ${name} already nuked — can't relaunch`, 'error');
+    return;
+  }
+
+  selectedCountry = { name, ...meta };
+  refreshGlobeColors();
+
+  document.getElementById('target-hint').style.display = 'none';
+  document.getElementById('target-flag').style.display = 'block';
+  document.getElementById('target-name').style.display = 'block';
+  document.getElementById('target-ticker').style.display = 'block';
+  document.getElementById('target-flag').textContent = meta.flag;
+  document.getElementById('target-name').textContent = name;
+  document.getElementById('target-ticker').textContent = `$${meta.ticker}`;
+  checkLaunchReady();
+}
+
+// ═══════════════════════════════════════════
+//  WARHEAD
+// ═══════════════════════════════════════════
+document.querySelectorAll('.w-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.w-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedWarhead = btn.dataset.type;
+  });
+});
+
+function checkLaunchReady() {
+  const ready = !!selectedCountry && !!walletPubkey;
+  document.getElementById('launch-btn').classList.toggle('ready', ready);
+  if (!walletPubkey) setStatus('Connect wallet to launch', '');
+  else if (!selectedCountry) setStatus('Select a country to target', '');
+  else setStatus(`Ready — ${selectedCountry.flag} ${selectedCountry.name}`, '');
+}
+
+// ═══════════════════════════════════════════
+//  MODAL
+// ═══════════════════════════════════════════
+function openModal() {
+  if (!selectedCountry || !walletPubkey) return;
+  document.getElementById('modal-flag-big').textContent = selectedCountry.flag;
+  document.getElementById('modal-cname').textContent = selectedCountry.name.toUpperCase();
+  document.getElementById('modal-cticker').textContent = `$${selectedCountry.ticker}`;
+  document.getElementById('modal-warhead-val').textContent = selectedWarhead;
+  document.getElementById('modal-wallet-show').textContent = `${walletPubkey.slice(0,6)}...${walletPubkey.slice(-4)}`;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// ═══════════════════════════════════════════
+//  CONFIRM LAUNCH → pump.fun
+// ═══════════════════════════════════════════
+async function confirmLaunch() {
+  if (isLaunching) return;
+  isLaunching = true;
+  closeModal();
+
+  const country = selectedCountry;
+  const btn = document.getElementById('launch-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ LAUNCHING...';
+
+  try {
+    // Fire visual missile first
+    fireMissile(country, async () => {
+      if (demoMode) {
+        // Demo: just do the visual impact, no real tx
+        onImpactEffect(country);
+        showToast(`🎬 DEMO — $${country.ticker} would launch on pump.fun`, 'success');
+        setStatus(`🎬 Demo hit! In production $${country.ticker} would go live.`, 'success');
+        isLaunching = false;
+        btn.disabled = false;
+        btn.textContent = '🚀 LAUNCH';
+        selectedCountry = null;
+        document.getElementById('target-hint').style.display = 'block';
+        document.getElementById('target-flag').style.display = 'none';
+        document.getElementById('target-name').style.display = 'none';
+        document.getElementById('target-ticker').style.display = 'none';
+        document.getElementById('launch-btn').classList.remove('ready');
+        globeInstance.polygonCapColor(() => 'rgba(0,200,255,0.06)');
+        globeInstance.polygonAltitude(() => 0.005);
+        return;
+      }
+      // After missile hits, do the pump.fun launch
+      await launchOnPumpFun(country);
+    });
+  } catch(e) {
+    console.error(e);
+    setStatus('Launch failed: ' + e.message, 'error');
+    showToast('Launch failed', 'error');
+    isLaunching = false;
+    btn.disabled = false;
+    btn.textContent = '🚀 LAUNCH';
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PUMP.FUN TOKEN CREATION
+// ═══════════════════════════════════════════
+async function launchOnPumpFun(country) {
+  const phantom = window.phantom?.solana || window.solana;
+
+  try {
+    setStatus('🎨 Generating token image...', 'pending');
+
+    // Generate token image from flag emoji on canvas
+    const tokenImageBlob = await generateTokenImage(country);
+
+    setStatus('📡 Uploading to IPFS...', 'pending');
+
+    // Upload metadata to pump.fun IPFS
+    const formData = new FormData();
+    formData.append('name', country.name);
+    formData.append('symbol', country.ticker);
+    formData.append('description', `${country.flag} The official ${country.name} token. Launched via missile.fun 🚀`);
+    formData.append('twitter', '');
+    formData.append('telegram', '');
+    formData.append('website', 'https://missile.fun');
+    formData.append('showName', 'true');
+    formData.append('file', tokenImageBlob, 'token.png');
+
+    const ipfsResp = await fetch('/api/ipfs', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!ipfsResp.ok) throw new Error(`IPFS upload failed: ${ipfsResp.status}`);
+    const ipfsData = await ipfsResp.json();
+    const metadataUri = ipfsData.metadataUri;
+
+    setStatus('🔑 Building transaction...', 'pending');
+
+    // Generate mint keypair
+    const mintKeypair = solanaWeb3.Keypair.generate();
+
+    // Call pump.fun create API to get the transaction
+    const createResp = await fetch('/api/trade-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        publicKey: walletPubkey,
+        action: 'create',
+        tokenMetadata: {
+          name: country.name,
+          symbol: country.ticker,
+          uri: metadataUri,
+        },
+        mint: mintKeypair.publicKey.toBase58(),
+        denominatedInSol: 'true',
+        amount: 0,
+        slippage: 10,
+        priorityFee: 0.0005,
+        pool: 'pump',
+      }),
+    });
+
+    if (!createResp.ok) throw new Error(`Create tx failed: ${createResp.status}`);
+    const txData = await createResp.arrayBuffer();
+
+    setStatus('✍️ Sign in Phantom...', 'pending');
+
+    // Deserialize + sign with mint keypair + user wallet
+    const tx = solanaWeb3.VersionedTransaction.deserialize(new Uint8Array(txData));
+    tx.sign([mintKeypair]);
+    const signedTx = await phantom.signTransaction(tx);
+
+    setStatus('📤 Sending to Solana...', 'pending');
+
+    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+    const sig = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 });
+
+    setStatus('⏳ Confirming...', 'pending');
+    await connection.confirmTransaction(sig, 'confirmed');
+
+    const mint = mintKeypair.publicKey.toBase58();
+    const pumpUrl = `https://pump.fun/${mint}`;
+
+    // Register with backend — mark country as permanently launched
+    await fetch('/api/launched', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country: country.name, ticker: country.ticker, flag: country.flag, mint, wallet: walletPubkey }),
+    });
+
+    // Update local DB immediately so globe updates right away
+    launchedDB[country.name] = { country: country.name, ticker: country.ticker, flag: country.flag, mint, wallet: walletPubkey, launchedAt: new Date().toISOString(), pumpUrl };
+
+    setStatus(`✅ Launched! <a href="${pumpUrl}" target="_blank" style="color:#0cf">View $${country.ticker} on pump.fun →</a>`, 'success');
+    showToast(`✅ $${country.ticker} IS LIVE ON PUMP.FUN`, 'success');
+    updateTickerFromDB();
+    onImpactEffect(country);
+  } catch(e) {
+    console.error(e);
+    // User rejected or error
+    if (e.message?.includes('User rejected')) {
+      setStatus('Transaction rejected', 'error');
+      showToast('Transaction rejected', 'error');
+    } else {
+      setStatus('Error: ' + e.message.slice(0,50), 'error');
+      showToast('Launch failed — check console', 'error');
+    }
+  } finally {
+    isLaunching = false;
+    const btn = document.getElementById('launch-btn');
+    btn.disabled = false;
+    btn.textContent = '🚀 LAUNCH';
+    selectedCountry = null;
+    document.getElementById('target-hint').style.display = 'block';
+    document.getElementById('target-flag').style.display = 'none';
+    document.getElementById('target-name').style.display = 'none';
+    document.getElementById('target-ticker').style.display = 'none';
+    document.getElementById('launch-btn').classList.remove('ready');
+    globeInstance.polygonCapColor(() => 'rgba(0,200,255,0.06)');
+    globeInstance.polygonAltitude(() => 0.005);
+  }
+}
+
+// ═══════════════════════════════════════════
+//  GENERATE TOKEN IMAGE (flag on canvas)
+// ═══════════════════════════════════════════
+function generateTokenImage(country) {
+  return new Promise(resolve => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 500; canvas.height = 500;
+    const ctx = canvas.getContext('2d');
+
+    // Background
+    const grad = ctx.createRadialGradient(250, 250, 0, 250, 250, 300);
+    grad.addColorStop(0, '#0a1a40');
+    grad.addColorStop(1, '#000510');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 500, 500);
+
+    // Glowing ring
+    ctx.beginPath();
+    ctx.arc(250, 250, 220, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0,200,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Flag emoji
+    ctx.font = '200px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(country.flag, 250, 230);
+
+    // Ticker text
+    ctx.font = 'bold 52px monospace';
+    ctx.fillStyle = '#ff4500';
+    ctx.fillText(`$${country.ticker}`, 250, 400);
+
+    // missile.fun watermark
+    ctx.font = '22px monospace';
+    ctx.fillStyle = 'rgba(0,200,255,0.5)';
+    ctx.fillText('missile.fun', 250, 460);
+
+    canvas.toBlob(resolve, 'image/png');
+  });
+}
+
+// ═══════════════════════════════════════════
+//  MISSILE ANIMATION
+// ═══════════════════════════════════════════
+const mc = document.getElementById('missile-canvas');
+const mctx = mc.getContext('2d');
+mc.width = window.innerWidth; mc.height = window.innerHeight;
+window.addEventListener('resize', () => { mc.width = window.innerWidth; mc.height = window.innerHeight; });
+
+let missiles = [], particles = [], rings = [], mushrooms = [];
+
+function latLngToScreen(lat, lng) {
+  if (!globeInstance) return { x: mc.width/2, y: mc.height/2 };
+  const pos = globeInstance.getScreenCoords(lat, lng, 0.01);
+  return pos || { x: mc.width/2, y: mc.height/2 };
+}
+
+function fireMissile(country, onImpact) {
+  const centroid = getCentroid(country.name);
+  const screenPos = latLngToScreen(centroid.lat, centroid.lng);
+  const isNuke = selectedWarhead === 'NUKE';
+  const isHyper = selectedWarhead === 'HYPER';
+  const count = isNuke ? 1 : isHyper ? 2 : 1;
+  let impactFired = false;
+
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const tx = screenPos.x + (Math.random()-0.5)*20;
+      const ty = screenPos.y + (Math.random()-0.5)*20;
+
+      if (isNuke) {
+        // Nuke drops straight from above, slow and menacing
+        const sx = tx + (Math.random()-0.5)*60;
+        const sy = -80;
+        missiles.push({
+          type: 'nuke',
+          sx, sy, tx, ty,
+          t: 0, startTime: performance.now(),
+          duration: 2800, // slow drop
+          done: false, trail: [],
+          cpx: tx, cpy: sy * 0.3, // nearly straight down
+          wobble: 0,
+          onImpact: ()=>{ if(!impactFired){ impactFired=true; if(onImpact)onImpact(); } }
+        });
+      } else {
+        // ICBM / Hyper — arc from edge
+        const edge = Math.floor(Math.random()*4);
+        let sx, sy;
+        if(edge===0){sx=Math.random()*mc.width;sy=-60;}
+        else if(edge===1){sx=mc.width+60;sy=Math.random()*mc.height*0.5;}
+        else if(edge===2){sx=-60;sy=Math.random()*mc.height*0.5;}
+        else{sx=Math.random()*mc.width*0.3;sy=-60;}
+        missiles.push({
+          type: isHyper ? 'hyper' : 'icbm',
+          sx, sy, tx, ty,
+          t: 0, startTime: performance.now(),
+          duration: isHyper ? 900 : 1600,
+          done: false, trail: [],
+          cpx: (sx+tx)/2+(Math.random()>0.5?1:-1)*100, cpy: Math.min(sy,ty)-150,
+          onImpact: !impactFired ? ()=>{ impactFired=true; if(onImpact)onImpact(); } : null
+        });
+      }
+    }, i * 350);
+  }
+}
+
+// Draw fat nuke bomb body
+function drawNuke(ctx, x, y, t) {
+  const scale = 1 + t * 0.4; // grows slightly as it falls
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  // Outer glow pulse
+  const pulse = 0.6 + Math.sin(Date.now()*0.008)*0.4;
+  const outerGlow = ctx.createRadialGradient(0,0,0,0,0,45);
+  outerGlow.addColorStop(0, `rgba(255,50,0,${0.15*pulse})`);
+  outerGlow.addColorStop(1, 'rgba(255,0,0,0)');
+  ctx.fillStyle = outerGlow;
+  ctx.beginPath(); ctx.arc(0,0,45,0,Math.PI*2); ctx.fill();
+
+  // Fat bomb body (fat ellipse)
+  const bodyGrad = ctx.createLinearGradient(-18,-28,18,28);
+  bodyGrad.addColorStop(0, '#555');
+  bodyGrad.addColorStop(0.3, '#999');
+  bodyGrad.addColorStop(0.6, '#ccc');
+  bodyGrad.addColorStop(1, '#333');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, 8, 18, 28, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Metal seam
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(0, 8, 18, 28, 0, 0, Math.PI*2);
+  ctx.stroke();
+
+  // Nose cone (pointed top)
+  const noseGrad = ctx.createLinearGradient(-12,-36,12,-18);
+  noseGrad.addColorStop(0, '#888');
+  noseGrad.addColorStop(1, '#444');
+  ctx.fillStyle = noseGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, -36);
+  ctx.bezierCurveTo(-4,-28,-14,-26,-14,-18);
+  ctx.lineTo(14,-18);
+  ctx.bezierCurveTo(14,-26,4,-28,0,-36);
+  ctx.fill();
+
+  // Radioactive ☢ symbol on body
+  ctx.fillStyle = 'rgba(255,220,0,0.85)';
+  ctx.font = 'bold 18px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('☢', 0, 8);
+
+  // Tail fins (3 of them)
+  ctx.fillStyle = '#444';
+  for(let f=0;f<3;f++){
+    ctx.save();
+    ctx.rotate((f/3)*Math.PI*2);
+    ctx.beginPath();
+    ctx.moveTo(0,36);
+    ctx.lineTo(-10,52);
+    ctx.lineTo(0,44);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Red stripe around middle
+  ctx.strokeStyle = '#ff2200';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(0, 8, 18, 6, 0, 0, Math.PI*2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// Nuke trail (green radioactive drip)
+function drawNukeTrail(trail) {
+  for(let j=0;j<trail.length;j++){
+    const pt = trail[j];
+    const a = (j/trail.length)*0.5;
+    const r = (j/trail.length)*6;
+    mctx.beginPath();
+    mctx.arc(pt.x, pt.y, r, 0, Math.PI*2);
+    mctx.fillStyle = `rgba(100,255,50,${a})`;
+    mctx.fill();
+  }
+}
+
+// Mushroom cloud
+function spawnMushroom(x, y) {
+  mushrooms.push({ x, y, startTime: performance.now(), duration: 4000 });
+}
+
+function drawMushrooms(now) {
+  for(let i=mushrooms.length-1;i>=0;i--){
+    const m = mushrooms[i];
+    const age = now - m.startTime;
+    const t = Math.min(age / m.duration, 1);
+    if(t >= 1){ mushrooms.splice(i,1); continue; }
+
+    const alpha = t < 0.1 ? t/0.1 : t > 0.7 ? 1-(t-0.7)/0.3 : 1;
+
+    // Ground shockwave ring
+    if(t < 0.3) {
+      const sr = (t/0.3)*300;
+      const sa = (1-t/0.3)*0.6;
+      mctx.beginPath(); mctx.arc(m.x, m.y, sr, 0, Math.PI*2);
+      mctx.strokeStyle = `rgba(255,200,50,${sa})`; mctx.lineWidth=4; mctx.stroke();
+    }
+
+    // Fireball base (rising)
+    const rise = t * 180;
+    const baseR = 60 + t*40;
+    const fbGrad = mctx.createRadialGradient(m.x, m.y-rise, 0, m.x, m.y-rise, baseR);
+    fbGrad.addColorStop(0, `rgba(255,255,200,${alpha*0.9})`);
+    fbGrad.addColorStop(0.3, `rgba(255,150,0,${alpha*0.8})`);
+    fbGrad.addColorStop(0.7, `rgba(200,50,0,${alpha*0.5})`);
+    fbGrad.addColorStop(1, `rgba(80,0,0,0)`);
+    mctx.fillStyle = fbGrad;
+    mctx.beginPath(); mctx.arc(m.x, m.y-rise, baseR, 0, Math.PI*2); mctx.fill();
+
+    // Stem / column
+    const stemH = t * 220;
+    const stemW = 18 + t*12;
+    const stemGrad = mctx.createLinearGradient(m.x-stemW, m.y, m.x+stemW, m.y);
+    stemGrad.addColorStop(0, `rgba(100,60,20,0)`);
+    stemGrad.addColorStop(0.2, `rgba(180,100,30,${alpha*0.7})`);
+    stemGrad.addColorStop(0.5, `rgba(220,140,40,${alpha*0.8})`);
+    stemGrad.addColorStop(0.8, `rgba(180,100,30,${alpha*0.7})`);
+    stemGrad.addColorStop(1, `rgba(100,60,20,0)`);
+    mctx.fillStyle = stemGrad;
+    mctx.beginPath();
+    mctx.rect(m.x-stemW, m.y-stemH, stemW*2, stemH);
+    mctx.fill();
+
+    // Mushroom cap (the iconic top)
+    if(t > 0.15) {
+      const capT = Math.min((t-0.15)/0.4, 1);
+      const capW = capT * 130;
+      const capH = capT * 55;
+      const capY = m.y - stemH - capH*0.3;
+      const capGrad = mctx.createRadialGradient(m.x, capY, 0, m.x, capY, capW);
+      capGrad.addColorStop(0, `rgba(255,220,100,${alpha*0.9})`);
+      capGrad.addColorStop(0.4, `rgba(220,100,20,${alpha*0.8})`);
+      capGrad.addColorStop(0.75, `rgba(120,40,10,${alpha*0.6})`);
+      capGrad.addColorStop(1, `rgba(60,20,0,0)`);
+      mctx.fillStyle = capGrad;
+      mctx.beginPath();
+      mctx.ellipse(m.x, capY, capW, capH, 0, 0, Math.PI*2);
+      mctx.fill();
+
+      // Cap outline smoke
+      mctx.strokeStyle = `rgba(80,40,10,${alpha*0.3})`;
+      mctx.lineWidth = 2;
+      mctx.beginPath();
+      mctx.ellipse(m.x, capY, capW, capH, 0, 0, Math.PI*2);
+      mctx.stroke();
+
+      // ☢ on cap
+      if(capT > 0.6) {
+        mctx.fillStyle = `rgba(255,255,0,${alpha*(capT-0.6)/0.4})`;
+        mctx.font = `bold ${Math.floor(capH*0.8)}px serif`;
+        mctx.textAlign='center'; mctx.textBaseline='middle';
+        mctx.fillText('☢', m.x, capY);
+      }
+    }
+  }
+}
+
+function animLoop(now) {
+  mctx.clearRect(0,0,mc.width,mc.height);
+
+  // Missiles
+  for(let i=missiles.length-1;i>=0;i--){
+    const m=missiles[i];
+    m.t = Math.min((now-m.startTime)/m.duration,1);
+    const t=m.t;
+    const x=(1-t)*(1-t)*m.sx+2*(1-t)*t*m.cpx+t*t*m.tx;
+    const y=(1-t)*(1-t)*m.sy+2*(1-t)*t*m.cpy+t*t*m.ty;
+    m.trail.push({x,y});
+    if(m.trail.length>(m.type==='nuke'?20:40))m.trail.shift();
+
+    if(m.type==='nuke'){
+      // Green radioactive trail
+      drawNukeTrail(m.trail);
+      // Big bomb body
+      if(t<0.97) drawNuke(mctx, x, y, t);
+    } else {
+      // Standard trail
+      for(let j=0;j<m.trail.length;j++){
+        const pt=m.trail[j];
+        const a=(j/m.trail.length)*0.7;
+        const r=(j/m.trail.length)*(m.type==='hyper'?5:3.5);
+        mctx.beginPath();
+        mctx.arc(pt.x,pt.y,r,0,Math.PI*2);
+        mctx.fillStyle=m.type==='hyper'?`rgba(150,100,255,${a})`:`rgba(255,${100+Math.floor(j*3)},0,${a})`;
+        mctx.fill();
+      }
+
+      // Missile body
+      if(t<0.98){
+        const pts=m.trail;
+        const dx=pts.length>1?x-pts[pts.length-2].x:m.tx-m.sx;
+        const dy=pts.length>1?y-pts[pts.length-2].y:m.ty-m.sy;
+        const ang=Math.atan2(dy,dx);
+        mctx.save(); mctx.translate(x,y); mctx.rotate(ang);
+        const len = m.type==='hyper'?16:14;
+        const g=mctx.createLinearGradient(-len,-3,4,3);
+        g.addColorStop(0,'rgba(180,200,220,0.95)');
+        g.addColorStop(1,'rgba(100,120,150,0.9)');
+        mctx.fillStyle=g;
+        mctx.beginPath();mctx.roundRect(-len,-3.5,len+8,7,2);mctx.fill();
+        mctx.fillStyle=m.type==='hyper'?'#aa44ff':'#ff3300';
+        mctx.beginPath();mctx.moveTo(8,0);mctx.lineTo(0,-3.5);mctx.lineTo(0,3.5);mctx.closePath();mctx.fill();
+        mctx.fillStyle=m.type==='hyper'?'rgba(180,100,255,0.9)':'rgba(80,140,255,0.9)';
+        mctx.beginPath();mctx.moveTo(-len,-3.5);mctx.lineTo(-len-7,-9);mctx.lineTo(-len+4,-3.5);mctx.closePath();mctx.fill();
+        mctx.beginPath();mctx.moveTo(-len,3.5);mctx.lineTo(-len-7,9);mctx.lineTo(-len+4,3.5);mctx.closePath();mctx.fill();
+        const glow=mctx.createRadialGradient(-len,0,0,-len,0,12);
+        glow.addColorStop(0,m.type==='hyper'?'rgba(200,100,255,0.95)':'rgba(255,200,50,0.95)');
+        glow.addColorStop(0.4,m.type==='hyper'?'rgba(120,0,255,0.5)':'rgba(255,80,0,0.5)');
+        glow.addColorStop(1,'rgba(255,30,0,0)');
+        mctx.fillStyle=glow;
+        mctx.beginPath();mctx.arc(-len,0,12,0,Math.PI*2);mctx.fill();
+        mctx.restore();
+      }
+    }
+
+    if(t>=1){
+      if(m.type==='nuke'){
+        // MASSIVE nuke explosion + mushroom cloud
+        spawnMushroom(m.tx, m.ty);
+        // Screen flash
+        mctx.fillStyle='rgba(255,255,200,0.6)';
+        mctx.fillRect(0,0,mc.width,mc.height);
+        // Huge particle burst
+        for(let p=0;p<200;p++){
+          const a=Math.random()*Math.PI*2, s=Math.random()*12+2;
+          particles.push({x:m.tx,y:m.ty,vx:Math.cos(a)*s,vy:Math.sin(a)*s-4,
+            r:Math.random()*6+2,life:120+Math.random()*80,
+            cr:Math.random()>0.5?255:100,cg:Math.floor(Math.random()*200),cb:0});
+        }
+        // Big rings
+        for(let r=0;r<3;r++) rings.push({x:m.tx,y:m.ty,r:0,maxR:150+r*80,alpha:1,startTime:now+r*100});
+      } else {
+        // Normal explosion
+        for(let p=0;p<80;p++){
+          const a=Math.random()*Math.PI*2,s=Math.random()*5+1;
+          particles.push({x:m.tx,y:m.ty,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2,r:Math.random()*3+1,life:100+Math.random()*40,cr:255,cg:Math.floor(Math.random()*150),cb:0});
+        }
+        rings.push({x:m.tx,y:m.ty,r:0,maxR:90,alpha:1,startTime:now});
+      }
+      if(m.onImpact)m.onImpact();
+      missiles.splice(i,1);
+    }
+  }
+
+  // Particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.06; p.life-=2;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    mctx.beginPath();mctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    mctx.fillStyle=`rgba(${p.cr},${p.cg},${p.cb},${p.life/140})`;
+    mctx.fill();
+  }
+
+  // Rings
+  for(let i=rings.length-1;i>=0;i--){
+    const r=rings[i];
+    const age=now-r.startTime;
+    if(age<0) continue;
+    r.r=(age/450)*r.maxR; r.alpha=Math.max(0,1-age/450);
+    if(r.alpha<=0){rings.splice(i,1);continue;}
+    mctx.beginPath();mctx.arc(r.x,r.y,r.r,0,Math.PI*2);
+    mctx.strokeStyle=`rgba(255,200,50,${r.alpha*0.8})`;
+    mctx.lineWidth=2.5; mctx.stroke();
+  }
+
+  // Mushroom clouds
+  drawMushrooms(now);
+
+  requestAnimationFrame(animLoop);
+}
+requestAnimationFrame(animLoop);
+
+// ═══════════════════════════════════════════
+//  GLOBE IMPACT FLASH
+// ═══════════════════════════════════════════
+function onImpactEffect(country) {
+  let f=0;
+  const fi=setInterval(()=>{
+    globeInstance.polygonCapColor(feat=>{
+      const n=feat.properties.NAME||feat.properties.ADMIN||'';
+      if(n!==country.name)return'rgba(0,200,255,0.06)';
+      return f%2===0?'rgba(255,255,255,0.95)':'rgba(255,69,0,0.65)';
+    });
+    f++;
+    if(f>=6){clearInterval(fi);
+      globeInstance.polygonCapColor(feat=>{
+        const n=feat.properties.NAME||feat.properties.ADMIN||'';
+        return n===country.name?'rgba(255,0,0,0.5)':'rgba(0,200,255,0.06)';
+      });
+    }
+  },150);
+}
+
+// ═══════════════════════════════════════════
+//  TICKER
+// ═══════════════════════════════════════════
+function addToTicker(country, mint) {
+  const t = document.getElementById('ticker-inner');
+  const span = document.createElement('span');
+  span.textContent = `🚀 $${country.ticker} just launched — pump.fun/${mint.slice(0,8)}...`;
+  t.prepend(span);
+}
+
+// ═══════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════
+function setStatus(msg, type) {
+  const el = document.getElementById('status-bar');
+  el.innerHTML = msg;
+  el.className = type ? `status-bar ${type}` : 'status-bar';
+  el.setAttribute('class', type ? type : '');
+  el.id = 'status-bar';
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  setTimeout(()=>{ t.className=''; },3800);
+}
+
+// ═══════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════
+// Generate square favicon from logo image
+(function() {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,64,64);
+    // Center-crop the wide logo into a square
+    const aspect = img.width / img.height;
+    const sw = img.height; // square crop from center
+    const sx = (img.width - sw) / 2;
+    ctx.drawImage(img, sx, 0, sw, img.height, 0, 0, 64, 64);
+    document.getElementById('favicon').href = c.toDataURL('image/png');
+  };
+  img.src = '/logo.jpeg';
+})();
+
+document.getElementById('loading').style.transition='opacity 0.5s';
+initGlobe().catch(()=>{
+  document.getElementById('loading').innerHTML='<div style="color:#f44;font-size:14px;letter-spacing:2px">FAILED TO LOAD — CHECK CONNECTION</div>';
+});
+</script>
+</body>
+</html>
